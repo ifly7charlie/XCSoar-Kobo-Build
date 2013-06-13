@@ -1,0 +1,113 @@
+diff -Naur bzip2-1.0.6/Makefile bzip2-1.0.6-kobo/Makefile
+--- bzip2-1.0.6/Makefile	2010-09-10 15:46:02.000000000 -0700
++++ bzip2-1.0.6-kobo/Makefile	2013-05-12 04:46:13.168013172 -0700
+@@ -15,16 +15,16 @@
+ SHELL=/bin/sh
+ 
+ # To assist in cross-compiling
+-CC=gcc
+-AR=ar
+-RANLIB=ranlib
++CC=${CROSSPREFIX}-gcc
++AR=${CROSSPREFIX}-ar
++RANLIB=${CROSSPREFIX}-ranlib
+ LDFLAGS=
+ 
+ BIGFILES=-D_FILE_OFFSET_BITS=64
+ CFLAGS=-Wall -Winline -O2 -g $(BIGFILES)
+ 
+ # Where you want it installed when you do 'make install'
+-PREFIX=/usr/local
++
+ 
+ 
+ OBJS= blocksort.o  \
+@@ -35,14 +35,11 @@
+       decompress.o \
+       bzlib.o
+ 
+-all: libbz2.a bzip2 bzip2recover test
++all: libbz2.a 
+ 
+ bzip2: libbz2.a bzip2.o
+ 	$(CC) $(CFLAGS) $(LDFLAGS) -o bzip2 bzip2.o -L. -lbz2
+ 
+-bzip2recover: bzip2recover.o
+-	$(CC) $(CFLAGS) $(LDFLAGS) -o bzip2recover bzip2recover.o
+-
+ libbz2.a: $(OBJS)
+ 	rm -f libbz2.a
+ 	$(AR) cq libbz2.a $(OBJS)
+@@ -52,61 +49,14 @@
+ 		$(RANLIB) libbz2.a ; \
+ 	fi
+ 
+-check: test
+-test: bzip2
+-	@cat words1
+-	./bzip2 -1  < sample1.ref > sample1.rb2
+-	./bzip2 -2  < sample2.ref > sample2.rb2
+-	./bzip2 -3  < sample3.ref > sample3.rb2
+-	./bzip2 -d  < sample1.bz2 > sample1.tst
+-	./bzip2 -d  < sample2.bz2 > sample2.tst
+-	./bzip2 -ds < sample3.bz2 > sample3.tst
+-	cmp sample1.bz2 sample1.rb2 
+-	cmp sample2.bz2 sample2.rb2
+-	cmp sample3.bz2 sample3.rb2
+-	cmp sample1.tst sample1.ref
+-	cmp sample2.tst sample2.ref
+-	cmp sample3.tst sample3.ref
+-	@cat words3
+ 
+ install: bzip2 bzip2recover
+-	if ( test ! -d $(PREFIX)/bin ) ; then mkdir -p $(PREFIX)/bin ; fi
+ 	if ( test ! -d $(PREFIX)/lib ) ; then mkdir -p $(PREFIX)/lib ; fi
+-	if ( test ! -d $(PREFIX)/man ) ; then mkdir -p $(PREFIX)/man ; fi
+-	if ( test ! -d $(PREFIX)/man/man1 ) ; then mkdir -p $(PREFIX)/man/man1 ; fi
+ 	if ( test ! -d $(PREFIX)/include ) ; then mkdir -p $(PREFIX)/include ; fi
+-	cp -f bzip2 $(PREFIX)/bin/bzip2
+-	cp -f bzip2 $(PREFIX)/bin/bunzip2
+-	cp -f bzip2 $(PREFIX)/bin/bzcat
+-	cp -f bzip2recover $(PREFIX)/bin/bzip2recover
+-	chmod a+x $(PREFIX)/bin/bzip2
+-	chmod a+x $(PREFIX)/bin/bunzip2
+-	chmod a+x $(PREFIX)/bin/bzcat
+-	chmod a+x $(PREFIX)/bin/bzip2recover
+-	cp -f bzip2.1 $(PREFIX)/man/man1
+-	chmod a+r $(PREFIX)/man/man1/bzip2.1
+ 	cp -f bzlib.h $(PREFIX)/include
+ 	chmod a+r $(PREFIX)/include/bzlib.h
+ 	cp -f libbz2.a $(PREFIX)/lib
+ 	chmod a+r $(PREFIX)/lib/libbz2.a
+-	cp -f bzgrep $(PREFIX)/bin/bzgrep
+-	ln -s -f $(PREFIX)/bin/bzgrep $(PREFIX)/bin/bzegrep
+-	ln -s -f $(PREFIX)/bin/bzgrep $(PREFIX)/bin/bzfgrep
+-	chmod a+x $(PREFIX)/bin/bzgrep
+-	cp -f bzmore $(PREFIX)/bin/bzmore
+-	ln -s -f $(PREFIX)/bin/bzmore $(PREFIX)/bin/bzless
+-	chmod a+x $(PREFIX)/bin/bzmore
+-	cp -f bzdiff $(PREFIX)/bin/bzdiff
+-	ln -s -f $(PREFIX)/bin/bzdiff $(PREFIX)/bin/bzcmp
+-	chmod a+x $(PREFIX)/bin/bzdiff
+-	cp -f bzgrep.1 bzmore.1 bzdiff.1 $(PREFIX)/man/man1
+-	chmod a+r $(PREFIX)/man/man1/bzgrep.1
+-	chmod a+r $(PREFIX)/man/man1/bzmore.1
+-	chmod a+r $(PREFIX)/man/man1/bzdiff.1
+-	echo ".so man1/bzgrep.1" > $(PREFIX)/man/man1/bzegrep.1
+-	echo ".so man1/bzgrep.1" > $(PREFIX)/man/man1/bzfgrep.1
+-	echo ".so man1/bzmore.1" > $(PREFIX)/man/man1/bzless.1
+-	echo ".so man1/bzdiff.1" > $(PREFIX)/man/man1/bzcmp.1
+ 
+ clean: 
+ 	rm -f *.o libbz2.a bzip2 bzip2recover \
+--- bzip2-1.0.6/Makefile  2013-05-16 02:53:25.822076148 -0700
++++ bzip2-1.0.6-fpic/Makefile   2013-05-16 02:51:03.815510012 -0700
+@@ -21,7 +21,7 @@
+ LDFLAGS=
+ 
+ BIGFILES=-D_FILE_OFFSET_BITS=64
+-CFLAGS=-Wall -Winline -O2 -g $(BIGFILES)
++CFLAGS=-Wall -fPIC -Winline -O2 -g $(BIGFILES)
+ 
+ # Where you want it installed when you do 'make install'
+ 

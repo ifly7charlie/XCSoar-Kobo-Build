@@ -1,0 +1,413 @@
+Binary files SDL-1.2.15-original/src/video/fbcon/a.out and SDL-1.2.15/src/video/fbcon/a.out differ
+diff -rupN SDL-1.2.15-original/src/video/fbcon/SDL_fbevents.c SDL-1.2.15/src/video/fbcon/SDL_fbevents.c
+--- SDL-1.2.15-original/src/video/fbcon/SDL_fbevents.c	2012-01-18 22:30:06.000000000 -0800
++++ SDL-1.2.15/src/video/fbcon/SDL_fbevents.c	2013-05-16 03:06:09.350888728 -0700
+@@ -55,6 +55,18 @@
+ #define GPM_NODE_FIFO	"/dev/gpmdata"
+ #endif
+ 
++#ifdef KOBO
++#include <linux/input.h>
++
++static int event0_fd = -1;
++static int event1_fd = -1;
++struct input_event ev0[64];
++struct input_event ev1[64];
++static void handle_event1(_THIS);
++static void handle_event0(_THIS);
++#endif
++
++
+ /*#define DEBUG_KEYBOARD*/
+ /*#define DEBUG_MOUSE*/
+ 
+@@ -166,9 +178,9 @@ int FB_EnterGraphicsMode(_THIS)
+ 			if ( ioctl(keyboard_fd, VT_GETSTATE, &vtstate) == 0 ) {
+ 				saved_vt = vtstate.v_active;
+ 			}
+-			if ( ioctl(keyboard_fd, VT_ACTIVATE, current_vt) == 0 ) {
+-				ioctl(keyboard_fd, VT_WAITACTIVE, current_vt);
+-			}
++			//			if ( ioctl(keyboard_fd, VT_ACTIVATE, current_vt) == 0 ) {
++			//	ioctl(keyboard_fd, VT_WAITACTIVE, current_vt);
++			//			}
+ 		}
+ 
+ 		/* Set the terminal input mode */
+@@ -598,7 +610,7 @@ fprintf(stderr, "Using ELO touchscreen\n
+ 	if ( mousedev == NULL ) {
+ 		/* FIXME someday... allow multiple mice in this driver */
+ 		static const char *ps2mice[] = {
+-		    "/dev/input/mice", "/dev/usbmouse", "/dev/psaux", NULL
++		  "/dev/input/mice", "/dev/usbmouse", "/dev/psaux", NULL
+ 		};
+ 		/* First try to use GPM in repeater mode */
+ 		if ( mouse_fd < 0 ) {
+@@ -657,7 +669,7 @@ fprintf(stderr, "Using PS2 mouse\n");
+ 		}
+ 		/* Next try to use a PPC ADB port mouse */
+ 		if ( mouse_fd < 0 ) {
+-			mouse_fd = open("/dev/adbmouse", O_RDONLY, 0);
++			mouse_fd = open("/dev/input/event3", O_RDONLY, 0);
+ 			if ( mouse_fd >= 0 ) {
+ #ifdef DEBUG_MOUSE
+ fprintf(stderr, "Using ADB mouse\n");
+@@ -666,10 +678,11 @@ fprintf(stderr, "Using ADB mouse\n");
+ 			}
+ 		}
+ 	}
++#if 0
+ 	/* Default to a serial Microsoft mouse */
+ 	if ( mouse_fd < 0 ) {
+ 		if ( mousedev == NULL ) {
+-			mousedev = "/dev/mouse";
++		 			mousedev = "/dev/input/event1";
+ 		}
+ 		mouse_fd = open(mousedev, O_RDONLY, 0);
+ 		if ( mouse_fd >= 0 ) {
+@@ -700,6 +713,7 @@ fprintf(stderr, "Using (default) MS mous
+ 			}
+ 		}
+ 	}
++#endif
+ 	if ( mouse_fd < 0 ) {
+ 		mouse_drv = MOUSE_NONE;
+ 	}
+@@ -1060,6 +1074,7 @@ void FB_PumpEvents(_THIS)
+ 
+ 		FD_ZERO(&fdset);
+ 		max_fd = 0;
++#ifndef KOBO
+ 		if ( keyboard_fd >= 0 ) {
+ 			FD_SET(keyboard_fd, &fdset);
+ 			if ( max_fd < keyboard_fd ) {
+@@ -1072,7 +1087,22 @@ void FB_PumpEvents(_THIS)
+ 				max_fd = mouse_fd;
+ 			}
+ 		}
++#else
++		if ( event0_fd >= 0 ) {
++			FD_SET(event0_fd, &fdset);
++			if ( max_fd < event0_fd ) {
++				max_fd = event0_fd;
++			}
++		}
++		if ( event1_fd >= 0 ) {
++			FD_SET(event1_fd, &fdset);
++			if ( max_fd < event1_fd ) {
++				max_fd = event1_fd;
++			}
++		}
++#endif
+ 		if ( select(max_fd+1, &fdset, NULL, NULL, &zero) > 0 ) {
++#ifndef KOBO
+ 			if ( keyboard_fd >= 0 ) {
+ 				if ( FD_ISSET(keyboard_fd, &fdset) ) {
+ 					handle_keyboard(this);
+@@ -1083,6 +1113,18 @@ void FB_PumpEvents(_THIS)
+ 					handle_mouse(this);
+ 				}
+ 			}
++#else
++			if ( event1_fd >= 0 ) {
++				if ( FD_ISSET(event1_fd, &fdset) ) {
++					handle_event1(this);
++				}
++			}
++			if ( event0_fd >= 0 ) {
++				if ( FD_ISSET(event0_fd, &fdset) ) {
++					handle_event0(this);
++				}
++			}
++#endif
+ 		}
+ 	} while ( posted );
+ }
+@@ -1252,3 +1294,90 @@ static SDL_keysym *TranslateKey(int scan
+ 	}
+ 	return(keysym);
+ }
++
++
++#ifdef KOBO
++//for handling TS
++static void handle_event0(_THIS)
++{
++  
++  struct SDL_keysym keysym;
++  int rd, i;
++
++  rd = read(event0_fd, ev0, sizeof(struct input_event) * 64);
++  if( rd < sizeof(struct input_event) ) return;
++
++  for (i = 0; i < rd / sizeof(struct input_event); i++)
++    {
++
++      if( ev0[i].type == 1 ) {
++	
++	if( ev0[i].code == KEY_POWER ) {
++
++	  keysym.scancode = ev0[i].code;
++	  keysym.sym = SDLK_POWER;
++	  keysym.mod = KMOD_NONE;
++
++	  posted += SDL_PrivateKeyboard( ev0[i].value ? SDL_PRESSED : SDL_RELEASED, &keysym);
++	}
++      }
++    }
++  return;
++}
++
++//for handling mouse
++static void handle_event1(_THIS)
++{
++  static int button=0;
++  
++  static int x, y;
++  static int current_x = 0, current_y = 0;
++
++  int rd, i;
++  
++  rd = read(event1_fd, ev1, sizeof(struct input_event) * 64);
++  if( rd < sizeof(struct input_event) ) return;
++
++  
++  for ( i = 0; i < rd / sizeof(struct input_event); i++)
++    {
++      if(ev1[i].type == 3 && ev1[i].code == 0) current_y = ev1[i].value;
++      else if(ev1[i].type == 3 && ev1[i].code == 1) current_x = 600-ev1[i].value;
++      else if(ev1[i].type == 1) {
++	/* force all touch types to be mouse as the kobo has nothing else */
++	button &= ~0x4; 
++	button |= ev1[i].value << 2; 
++      } else if(ev1[i].type == 0 && ev1[i].code == 0 && ev1[i].value == 0) {
++	/* end of sync frame, so emit to the application */
++	FB_vgamousecallback(button, 1, current_x-x, current_y-y);
++        x = current_x; y = current_y;
++      }
++    }
++  
++  return;
++}
++int FB_OpenEventX(_THIS)
++{
++  event0_fd = open("/dev/input/event0", O_RDWR);
++  event1_fd = open("/dev/input/event1", O_RDWR);
++
++  if(event0_fd < 0 && event1_fd < 0)
++    return 0;
++  
++  return 1;
++}
++
++void FB_CloseEventX(_THIS)
++{
++  if ( event0_fd > 0 ) {
++    close(event0_fd);
++  }
++
++  if ( event1_fd > 0 ) {
++    close(event1_fd);
++  }
++
++  event0_fd = -1;
++  event1_fd = -1;
++}
++#endif
+diff -rupN SDL-1.2.15-original/src/video/fbcon/SDL_fbevents_c.h SDL-1.2.15/src/video/fbcon/SDL_fbevents_c.h
+--- SDL-1.2.15-original/src/video/fbcon/SDL_fbevents_c.h	2012-01-18 22:30:06.000000000 -0800
++++ SDL-1.2.15/src/video/fbcon/SDL_fbevents_c.h	2013-05-16 03:06:09.350888728 -0700
+@@ -36,3 +36,9 @@ extern void FB_LeaveGraphicsMode(_THIS);
+ 
+ extern void FB_InitOSKeymap(_THIS);
+ extern void FB_PumpEvents(_THIS);
++
++static int FB_VideoInit(_THIS, SDL_PixelFormat *vformat);
++extern int FB_OpenEventX(_THIS);
++extern void FB_CloseEventX(_THIS);
++extern void FB_vgamousecallback(int button, int relative, int dx, int dy);
++  
+diff -rupN SDL-1.2.15-original/src/video/fbcon/SDL_fbvideo.c SDL-1.2.15/src/video/fbcon/SDL_fbvideo.c
+--- SDL-1.2.15-original/src/video/fbcon/SDL_fbvideo.c	2012-01-18 22:30:06.000000000 -0800
++++ SDL-1.2.15/src/video/fbcon/SDL_fbvideo.c	2013-05-23 03:35:38.721524563 -0700
+@@ -48,7 +48,7 @@
+ #include "SDL_fbmatrox.h"
+ #include "SDL_fbriva.h"
+ 
+-/*#define FBCON_DEBUG*/
++/*#define FBCON_DEBUG   */
+ 
+ #if defined(i386) && defined(FB_TYPE_VGA_PLANES)
+ #define VGA16_FBCON_SUPPORT
+@@ -56,6 +56,7 @@
+ #ifndef FB_AUX_VGA_PLANES_VGA4
+ #define FB_AUX_VGA_PLANES_VGA4	0
+ #endif
++
+ /*
+ static inline void outb (unsigned char value, unsigned short port)
+ {
+@@ -64,6 +65,15 @@ static inline void outb (unsigned char v
+ */
+ #endif /* FB_TYPE_VGA_PLANES */
+ 
++#ifdef KOBO
++
++#define KOBO_DITHERMATRIX_WIDTH 9
++#define KOBO_DITHERMATRIX_HEIGHT 13
++
++static uint_fast16_t dither_pattern2[KOBO_DITHERMATRIX_HEIGHT+1][KOBO_DITHERMATRIX_WIDTH+1];
++
++#endif
++
+ /* A list of video resolutions that we query for (sorted largest to smallest) */
+ static const SDL_Rect checkres[] = {
+ 	{  0, 0, 1600, 1200 },		/* 16 bpp: 0x11E, or 286 */
+@@ -506,6 +516,28 @@ static int FB_VideoInit(_THIS, SDL_Pixel
+ 	const char *rotation;
+ 	FILE *modesdb;
+ 
++#ifdef KOBO
++	
++	{
++	  int R = 4, 
++	    m = KOBO_DITHERMATRIX_WIDTH, 
++	    n = KOBO_DITHERMATRIX_HEIGHT; 
++
++	  
++	  // k will be in the range of 0 -> 9*13 (m*n) (117), 
++	  // needs to be in the range of 64^2*2.9 based on a 565 display surface
++	  int k = 0;
++	  for( ; k < m*n; k++ ) {
++	    // square scaled then multiple by 3 channels (each channel is (0-64)squared
++	    dither_pattern2[ (k*R)%n ][ (k*R)%m ] = (64*k)/(m*n) * 2.85;
++	    //	    dither_pattern2[ (k*R)%n ][ (k*R)%m ] = ((64*k)/(m*n) * (64*k)/(m*n)) * 2.9;
++	  }
++	}
++	    
++
++#endif
++
++
+ 	/* Initialize the library */
+ 	SDL_fbdev = SDL_getenv("SDL_FBDEV");
+ 	if ( SDL_fbdev == NULL ) {
+@@ -784,6 +816,8 @@ static int FB_VideoInit(_THIS, SDL_Pixel
+ 		}
+ 	}
+ 
++	shadow_fb = 1;
++
+ 	if (shadow_fb) {
+ 		shadow_mem = (char *)SDL_malloc(mapped_memlen);
+ 		if (shadow_mem == NULL) {
+@@ -792,11 +826,22 @@ static int FB_VideoInit(_THIS, SDL_Pixel
+ 		} 
+ 	}
+ 
++#ifdef KOBO
++	  if ( FB_OpenEventX(this) == 0 ) {
++	    SDL_SetError("Unable to open /dev/input/eventX");
++	    FB_VideoQuit(this);
++	    return(-1);
++	  }
++	  printf( "Opened events\n" );
++#endif
++
+ 	/* Enable mouse and keyboard support */
+ 	if ( FB_OpenKeyboard(this) < 0 ) {
+ 		FB_VideoQuit(this);
+ 		return(-1);
+ 	}
++
++#ifndef KOBO
+ 	if ( FB_OpenMouse(this) < 0 ) {
+ 		const char *sdl_nomouse;
+ 
+@@ -807,6 +852,7 @@ static int FB_VideoInit(_THIS, SDL_Pixel
+ 			return(-1);
+ 		}
+ 	}
++#endif
+ 
+ 	/* We're done! */
+ 	return(0);
+@@ -1026,7 +1072,8 @@ static SDL_Surface *FB_SetVideoMode(_THI
+ #endif
+ 	/* Do not use double buffering with shadow buffer */
+ 	if (shadow_fb) {
+-		flags &= ~SDL_DOUBLEBUF;
++	  fprintf(stderr, "using shadow_fb\n");
++	  flags &= ~SDL_DOUBLEBUF;
+ 	}
+ 
+ 	if ( (vinfo.xres != width) || (vinfo.yres != height) ||
+@@ -1442,6 +1489,7 @@ static int FB_FlipHWSurface(_THIS, SDL_S
+ 	return(0);
+ }
+ 
++
+ static void FB_blit16(Uint8 *byte_src_pos, int src_right_delta, int src_down_delta,
+ 		Uint8 *byte_dst_pos, int dst_linebytes, int width, int height)
+ {
+@@ -1449,13 +1497,57 @@ static void FB_blit16(Uint8 *byte_src_po
+ 	Uint16 *src_pos = (Uint16 *)byte_src_pos;
+ 	Uint16 *dst_pos = (Uint16 *)byte_dst_pos;
+ 
++#ifdef KOBO
++	// this will cause the noise to shift around on the screen, amazingly this
++	// has the effect of causing the pixels to 'refresh' preventing darkening of
++	// the ghosting as dithered areas overlap.
++	uint_fast16_t dither_v = rand() % KOBO_DITHERMATRIX_HEIGHT;
++
++#endif
+ 	while (height) {
+ 		Uint16 *src = src_pos;
+ 		Uint16 *dst = dst_pos;
++
++#ifdef KOBO
++		// we use this for scanning the dither pattern
++		// a lot less math than doing it with a mod on each pixel...
++		uint_fast16_t *dither_h = dither_pattern2[dither_v];
++		uint_fast16_t *dither_h_start = dither_h, *dither_h_end = dither_h + KOBO_DITHERMATRIX_WIDTH;
++
++		if( ++dither_v == KOBO_DITHERMATRIX_HEIGHT ) {
++		  dither_v = 0;
++		}
++#endif
++
+ 		for (w = width; w != 0; w--) {
+-			*dst = *src;
+-			src += src_right_delta;
+-			dst++;
++#ifdef KOBO
++		  // Dithering is important to ensure that we have high speed updates, on the e-ink screen
++		  // it will only achieve a low refresh rate when it has colours other than black or white
++		  // we are assuming a 565 screen here as an optimisation, if you get wonky output on a non
++		  // kobo mini device that would be the problem ;)
++
++		  // summed brightness of the pixel, not perfect squared would be better at representing 
++		  // apparent brightness but this is quicker which matters on the Kobo
++		  uint_fast16_t c = ((*src >> 10)&0x3e) +  ((*src >>5)&0x3f) + ((*src<<1)&0x3e);          
++
++		  // Check to see if we are above the threshold for the current pixel
++		  // it is based on the dither pattern.  We use the random offset to deliberately
++		  // make the pattern move on each update, which will level and reduce the ghosting over time.
++		  *dst = (c > *dither_h) ? 0xffff : 0;
++
++		  if( ++dither_h == dither_h_end ) {
++		    dither_h = dither_h_start;
++		  }
++
++		  //		  *dst= (c > dither_pattern2[(random_delta_h+height) % KOBO_DITHERMATRIX_HEIGHT][(random_delta_w+w) % KOBO_DITHERMATRIX_WIDTH])
++		  src ++;
++		  dst ++;
++
++#else
++		  *dst = *src;
++		  src++;
++		  dst++;
++#endif
+ 		}
+ 		dst_pos = (Uint16 *)((Uint8 *)dst_pos + dst_linebytes);
+ 		src_pos += src_down_delta;

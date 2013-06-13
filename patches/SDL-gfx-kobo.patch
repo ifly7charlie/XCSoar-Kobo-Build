@@ -1,0 +1,756 @@
+--- SDL_gfx-2.0.23-original/Makefile.am	2009-12-22 14:00:31.000000000 +1100
++++ SDL_gfx-2.0.23/Makefile.am	2013-06-01 16:39:33.837867515 +1000
+@@ -15,6 +15,7 @@
+ 
+ libSDL_gfx_la_SOURCES =		\
+ 	SDL_gfxPrimitives.c	\
++	SDL_gfxFastDraw.c	\
+ 	SDL_rotozoom.c	\
+ 	SDL_framerate.c \
+ 	SDL_imageFilter.c \
+--- SDL_gfx-2.0.23-original/SDL_gfxFastDraw.c	1969-12-31 16:00:00.000000000 -0800
++++ SDL_gfx-2.0.23/SDL_gfxFastDraw.c	2013-05-22 11:37:51.741174572 -0700
+@@ -0,0 +1,231 @@
++/* 
++
++SDL_gfxPrimitives.c: graphics primitives for SDL surfaces
++
++Copyright (C) 2001-2011  Andreas Schiffler
++
++This software is provided 'as-is', without any express or implied
++warranty. In no event will the authors be held liable for any damages
++arising from the use of this software.
++
++Permission is granted to anyone to use this software for any purpose,
++including commercial applications, and to alter it and redistribute it
++freely, subject to the following restrictions:
++
++   1. The origin of this software must not be misrepresented; you must not
++   claim that you wrote the original software. If you use this software
++   in a product, an acknowledgment in the product documentation would be
++   appreciated but is not required.
++
++   2. Altered source versions must be plainly marked as such, and must not be
++   misrepresented as being the original software.
++
++   3. This notice may not be removed or altered from any source
++   distribution.
++
++Andreas Schiffler -- aschiffler at ferzkopp dot net
++
++*/
++
++#include <stdio.h>
++#include <stdlib.h>
++#include <math.h>
++#include <string.h>
++
++#include "SDL_gfxPrimitives.h"
++#include "SDL_rotozoom.h"
++#include "SDL_gfxPrimitives_font.h"
++
++
++/* ----- Defines for pixel clipping tests */
++
++#define clip_xmin(surface) surface->clip_rect.x
++#define clip_xmax(surface) surface->clip_rect.x+surface->clip_rect.w
++#define clip_ymin(surface) surface->clip_rect.y
++#define clip_ymax(surface) surface->clip_rect.y+surface->clip_rect.h
++
++
++
++typedef void (*drawPointer)( SDL_Surface *dst, Sint16 x, Sint16 y, Uint32 color, Uint8 alpha );
++
++
++#define BPP(dst) dst->format->BytesPerPixel
++#define SDL_POINTER(type,dst,x,y) (type *)(((Uint8 *)dst->pixels) + y * dst->pitch + x * BPP(dst))
++
++/*!
++ * First set of functions is for non-alpha colour rendering
++ *
++ */
++void pixelNoAlpha_1( SDL_Surface *dst, Sint16 x, Sint16 y, Uint32 color, Uint8  unused /*alpha*/ ) 
++{
++  if ((x >= clip_xmin(dst)) && (x < clip_xmax(dst)) && (y >= clip_ymin(dst)) && (y < clip_ymax(dst))) {
++    *(SDL_POINTER(Uint8,dst,x,y)) = color;
++  }
++}
++
++void pixelNoAlpha_2( SDL_Surface *dst, Sint16 x, Sint16 y, Uint32 color, Uint8  unused /*alpha*/ ) 
++{
++  if ((x >= clip_xmin(dst)) && (x < clip_xmax(dst)) && (y >= clip_ymin(dst)) && (y < clip_ymax(dst))) {
++    *(SDL_POINTER(Uint16,dst,x,y)) = color;
++  }
++}
++
++void pixelNoAlpha_3( SDL_Surface *dst, Sint16 x, Sint16 y, Uint32 color, Uint8 unused /*alpha*/ ) 
++{
++  if ((x >= clip_xmin(dst)) && (x < clip_xmax(dst)) && (y >= clip_ymin(dst)) && (y < clip_ymax(dst))) {
++    Uint8 *p = (SDL_POINTER(Uint8,dst,x,y));
++    if (SDL_BYTEORDER == SDL_BIG_ENDIAN) {
++      p[0] = (color >> 16) & 0xff;
++      p[1] = (color >> 8) & 0xff;
++      p[2] = color & 0xff;
++    } else {
++      p[0] = color & 0xff;
++      p[1] = (color >> 8) & 0xff;
++      p[2] = (color >> 16) & 0xff;
++    }
++  }
++}
++
++void pixelNoAlpha_4( SDL_Surface *dst, Sint16 x, Sint16 y, Uint32 color, Uint8 unused /*alpha*/ ) 
++{
++  if ((x >= clip_xmin(dst)) && (x < clip_xmax(dst)) && (y >= clip_ymin(dst)) && (y < clip_ymax(dst))) {
++    *(SDL_POINTER(Uint32,dst,x,y)) = color;
++  }
++}
++
++/*
++ * second set does alpha as well
++ *
++ */
++
++void pixelAlpha_1(SDL_Surface *dst, Sint16 x, Sint16 y, Uint32 color, Uint8 alpha) {
++  if ((x >= clip_xmin(dst)) && (x < clip_xmax(dst)) && (y >= clip_ymin(dst)) && (y < clip_ymax(dst))) {
++    Uint8 *pixel = (Uint8 *) dst->pixels + y * dst->pitch + x;
++    SDL_PixelFormat *format = dst->format;
++    SDL_Palette *palette = format->palette;
++    SDL_Color *colors = palette->colors;
++    SDL_Color dColor = colors[*pixel];
++    SDL_Color sColor = colors[color];
++    Uint8 dR = dColor.r;
++    Uint8 dG = dColor.g;
++    Uint8 dB = dColor.b;
++    Uint8 sR = sColor.r;
++    Uint8 sG = sColor.g;
++    Uint8 sB = sColor.b;
++    
++    dR = dR + ((sR - dR) * alpha >> 8);
++    dG = dG + ((sG - dG) * alpha >> 8);
++    dB = dB + ((sB - dB) * alpha >> 8);
++    
++    *pixel = SDL_MapRGB(format, dR, dG, dB);
++  }
++}
++
++void pixelAlpha_2(SDL_Surface *dst, Sint16 x, Sint16 y, Uint32 color, Uint8 alpha) {
++  if ((x >= clip_xmin(dst)) && (x < clip_xmax(dst)) && (y >= clip_ymin(dst)) && (y < clip_ymax(dst))) {
++    Uint16 *pixel = SDL_POINTER(Uint16,dst,x,y);
++    SDL_PixelFormat *format = dst->format;
++    Uint32 dc = *pixel;
++    Uint32 Rmask, Gmask, Bmask, Amask;
++    Uint32 R, G, B, A;
++    
++    Rmask = format->Rmask;
++    Gmask = format->Gmask;
++    Bmask = format->Bmask;
++    Amask = format->Amask;
++    R = ((dc & Rmask) + (((color & Rmask) - (dc & Rmask)) * alpha >> 8)) & Rmask;
++    G = ((dc & Gmask) + (((color & Gmask) - (dc & Gmask)) * alpha >> 8)) & Gmask;
++    B = ((dc & Bmask) + (((color & Bmask) - (dc & Bmask)) * alpha >> 8)) & Bmask;
++    *pixel = R | G | B;
++    if (Amask!=0) {
++      A = ((dc & Amask) + (((color & Amask) - (dc & Amask)) * alpha >> 8)) & Amask;
++      *pixel |= A;
++    }
++  }
++}
++
++
++void pixelAlpha_3(SDL_Surface *dst, Sint16 x, Sint16 y, Uint32 color, Uint8 alpha) {
++  if ((x >= clip_xmin(dst)) && (x < clip_xmax(dst)) && (y >= clip_ymin(dst)) && (y < clip_ymax(dst))) {
++    Uint8 Rshift8, Gshift8, Bshift8, Ashift8;
++    Uint8 *pixel = SDL_POINTER(Uint8,dst,x,y); 
++    Uint8 dR, dG, dB, dA = 0;
++    Uint8 sR, sG, sB, sA = 0;
++    Uint32 Rshift, Gshift, Bshift, Ashift;
++    SDL_PixelFormat *format = dst->format;
++
++    Rshift = format->Rshift;
++    Gshift = format->Gshift;
++    Bshift = format->Bshift;
++    Ashift = format->Ashift;
++    
++    Rshift8 = Rshift >> 3;
++    Gshift8 = Gshift >> 3;
++    Bshift8 = Bshift >> 3;
++    Ashift8 = Ashift >> 3;
++    dR = *((pixel) + Rshift8);
++    dG = *((pixel) + Gshift8);
++    dB = *((pixel) + Bshift8);
++    dA = *((pixel) + Ashift8);
++    
++    sR = (color >> Rshift) & 0xff;
++    sG = (color >> Gshift) & 0xff;
++    sB = (color >> Bshift) & 0xff;
++    sA = (color >> Ashift) & 0xff;
++    
++    dR = dR + ((sR - dR) * alpha >> 8);
++    dG = dG + ((sG - dG) * alpha >> 8);
++    dB = dB + ((sB - dB) * alpha >> 8);
++    dA = dA + ((sA - dA) * alpha >> 8);
++    
++    *((pixel) + Rshift8) = dR;
++    *((pixel) + Gshift8) = dG;
++    *((pixel) + Bshift8) = dB;
++    *((pixel) + Ashift8) = dA;
++  }
++}
++
++void pixelAlpha_4(SDL_Surface *dst, Sint16 x, Sint16 y, Uint32 color, Uint8 alpha) {
++  if ((x >= clip_xmin(dst)) && (x < clip_xmax(dst)) && (y >= clip_ymin(dst)) && (y < clip_ymax(dst))) {
++    Uint32 *pixel = SDL_POINTER(Uint32,dst,x,y);
++    Uint32 dc = *pixel;
++    Uint32 Rmask, Gmask, Bmask, Amask;
++    Uint32 R, G, B, A;
++    Uint32 Rshift, Gshift, Bshift, Ashift;
++    SDL_PixelFormat *format = dst->format;
++
++    Rmask = format->Rmask;
++    Gmask = format->Gmask;
++    Bmask = format->Bmask;
++    Amask = format->Amask;
++    
++    Rshift = format->Rshift;
++    Gshift = format->Gshift;
++    Bshift = format->Bshift;
++    Ashift = format->Ashift;
++    
++    R = ((dc & Rmask) + (((((color & Rmask) - (dc & Rmask)) >> Rshift) * alpha >> 8) << Rshift)) & Rmask;
++    G = ((dc & Gmask) + (((((color & Gmask) - (dc & Gmask)) >> Gshift) * alpha >> 8) << Gshift)) & Gmask;
++    B = ((dc & Bmask) + (((((color & Bmask) - (dc & Bmask)) >> Bshift) * alpha >> 8) << Bshift)) & Bmask;
++    *pixel = R | G | B;
++    if (Amask!=0) {
++      A = ((dc & Amask) + (((((color & Amask) - (dc & Amask)) >> Ashift) * alpha >> 8) << Ashift)) & Amask;
++      *pixel |= A;
++    }
++  }
++}
++
++typedef void (*drawPointer)( SDL_Surface *dst, Sint16 x, Sint16 y, Uint32 color, Uint8 alpha );
++
++const drawPointer drawRoutinesAlpha[] = { &pixelAlpha_1, &pixelAlpha_2, &pixelAlpha_3, &pixelAlpha_4 };
++const drawPointer drawRoutinesNoAlpha[] = { &pixelNoAlpha_1, &pixelNoAlpha_2, &pixelNoAlpha_3, &pixelNoAlpha_4 };
++					
++
++/*
++ * Establish the correct drawing routing based on if it uses alpha blending or not
++ */
++
++drawPointer getDrawRoutine( SDL_Surface *dst, Uint8 alpha ) {
++  return alpha != 0xff ? drawRoutinesAlpha[ dst->format->BytesPerPixel -1 ] :
++    drawRoutinesNoAlpha[ dst->format->BytesPerPixel -1 ];
++}
+diff -upN SDL_gfx-2.0.23-original/SDL_gfx.pc SDL_gfx-2.0.23/SDL_gfx.pc
+--- SDL_gfx-2.0.23-original/SDL_gfx.pc	1969-12-31 16:00:00.000000000 -0800
++++ SDL_gfx-2.0.23/SDL_gfx.pc	2013-05-16 03:06:36.468712965 -0700
+@@ -0,0 +1,12 @@
++prefix=//usr/arm-linux-gnueabihf
++exec_prefix=${prefix}
++libdir=${exec_prefix}/lib
++includedir=${prefix}/include
++
++Name: SDL_gfx
++Description: drawing and graphical effects extension for SDL
++Version: 2.0.23
++Requires: sdl >= 1.2.0
++Libs: -L${libdir} -lSDL_gfx
++Cflags: -I${includedir}/SDL
++
+diff -upN SDL_gfx-2.0.23-original/SDL_gfxPrimitives.c SDL_gfx-2.0.23/SDL_gfxPrimitives.c
+--- SDL_gfx-2.0.23-original/SDL_gfxPrimitives.c	2011-12-03 23:00:09.000000000 -0800
++++ SDL_gfx-2.0.23/SDL_gfxPrimitives.c	2013-05-23 09:11:20.678025088 -0700
+@@ -2,29 +2,29 @@
+ 
+ SDL_gfxPrimitives.c: graphics primitives for SDL surfaces
+ 
+-Copyright (C) 2001-2011  Andreas Schiffler
+-
+-This software is provided 'as-is', without any express or implied
+-warranty. In no event will the authors be held liable for any damages
+-arising from the use of this software.
+-
+-Permission is granted to anyone to use this software for any purpose,
+-including commercial applications, and to alter it and redistribute it
+-freely, subject to the following restrictions:
+-
+-   1. The origin of this software must not be misrepresented; you must not
+-   claim that you wrote the original software. If you use this software
+-   in a product, an acknowledgment in the product documentation would be
+-   appreciated but is not required.
+-
+-   2. Altered source versions must be plainly marked as such, and must not be
+-   misrepresented as being the original software.
+-
+-   3. This notice may not be removed or altered from any source
+-   distribution.
+-
+-Andreas Schiffler -- aschiffler at ferzkopp dot net
+-
++Copyright (C) 2001-2011  Andreas Schiffler
++
++This software is provided 'as-is', without any express or implied
++warranty. In no event will the authors be held liable for any damages
++arising from the use of this software.
++
++Permission is granted to anyone to use this software for any purpose,
++including commercial applications, and to alter it and redistribute it
++freely, subject to the following restrictions:
++
++   1. The origin of this software must not be misrepresented; you must not
++   claim that you wrote the original software. If you use this software
++   in a product, an acknowledgment in the product documentation would be
++   appreciated but is not required.
++
++   2. Altered source versions must be plainly marked as such, and must not be
++   misrepresented as being the original software.
++
++   3. This notice may not be removed or altered from any source
++   distribution.
++
++Andreas Schiffler -- aschiffler at ferzkopp dot net
++
+ */
+ 
+ #include <stdio.h>
+@@ -43,6 +43,12 @@ Andreas Schiffler -- aschiffler at ferzk
+ 
+ /* ---- Structures */
+ 
++typedef void (*drawPointer)( SDL_Surface *dst, Sint16 x, Sint16 y, Uint32 color, Uint8 alpha );
++
++/* Establish the correct drawing routing based on if it uses alpha blending or not */
++drawPointer getDrawRoutine( SDL_Surface *dst, Uint8 alpha );
++
++
+ /*!
+ \brief The structure passed to the internal Bresenham iterator.
+ */
+@@ -63,6 +69,10 @@ typedef struct {
+ 	int oct2;
+ 	int quad4;
+ 	Sint16 last1x, last1y, last2x, last2y, first1x, first1y, first2x, first2y, tempx, tempy;
++        Uint32 mcolor;
++        Uint8 alpha;
++        Uint8 pattern;
++  drawPointer drawRoutine;
+ } SDL_gfxMurphyIterator;
+ 
+ /* ----- Defines for pixel clipping tests */
+@@ -72,6 +82,15 @@ typedef struct {
+ #define clip_ymin(surface) surface->clip_rect.y
+ #define clip_ymax(surface) surface->clip_rect.y+surface->clip_rect.h-1
+ 
++
++
++
++
++
++
++
++
++
+ /*!
+ \brief Internal pixel drawing - fast, no blending, no locking, clipping.
+ 
+@@ -266,6 +285,10 @@ int fastPixelRGBANolock(SDL_Surface * ds
+ 	return (fastPixelColorNolock(dst, x, y, color));
+ }
+ 
++
++
++
++
+ /*!
+ \brief Internal pixel drawing function with alpha blending where input color in in destination format.
+ 
+@@ -483,6 +506,46 @@ int _putPixelAlpha(SDL_Surface *dst, Sin
+ }
+ 
+ /*!
++\brief Internal pixel drawing function with patterning and alpha blending where input color is in destination format.
++
++Contains two alternative 32 bit alpha blending routines which can be enabled at the source
++level with the defines DEFAULT_ALPHA_PIXEL_ROUTINE or EXPERIMENTAL_ALPHA_PIXEL_ROUTINE.
++Only the bits up to the surface depth are significant in the color value.
++
++\param dst The surface to draw on.
++\param x The horizontal coordinate of the pixel.
++\param y The vertical position of the pixel.
++\param color The color value of the pixel to draw. 
++\param alpha The blend factor to apply while drawing.
++\param pattern The pattern to apply
++
++\returns Returns 0 on success, -1 on failure.
++*/
++int _putPixelPatterenedAlpha(SDL_Surface *dst, Sint16 x, Sint16 y, Uint32 color, Uint8 alpha, Uint8 pattern)
++{
++  
++  switch( pattern ) {
++  case 1: /* longitudinal stripes */
++    if( x & 1 ) return 1;
++    break;
++  case 2: /* traverse stripes */
++    if( y & 1 ) return 1;
++    break;
++  case 3: /* checkerboard */
++    if( (x & 1)^(y & 1) ) return 1;
++    break;
++  case 4: /* diagonal1 */
++    if( (x+y) & 3 ) return 1;
++    break;
++  case 5: /* diagonal2 */
++    if( (x-y) & 3 ) return 1;
++    break;
++  }
++    
++  return _putPixelAlpha( dst, x, y, color, alpha );
++}
++
++/*!
+ \brief Pixel draw with blending enabled if a<255.
+ 
+ \param dst The surface to draw on.
+@@ -4989,6 +5052,117 @@ int polygonColor(SDL_Surface * dst, cons
+ 	return (result);
+ }
+ 
++int thickPolygonColor(SDL_Surface * dst, const Sint16 * vx, const Sint16 * vy, int n, Uint8 width, Uint32 color)
++{
++	int result;
++	int i;
++	const Sint16 *x1, *y1, *x2, *y2;
++
++	/*
++	* Check visibility of clipping rectangle
++	*/
++	if ((dst->clip_rect.w==0) || (dst->clip_rect.h==0)) {
++		return(0);
++	}
++
++	/*
++	* Vertex array NULL check 
++	*/
++	if (vx == NULL) {
++		return (-1);
++	}
++	if (vy == NULL) {
++		return (-1);
++	}
++
++	/*
++	* Sanity check 
++	*/
++	if (n < 3) {
++		return (-1);
++	}
++
++	/*
++	* Pointer setup 
++	*/
++	x1 = x2 = vx;
++	y1 = y2 = vy;
++	x2++;
++	y2++;
++
++	/*
++	* Draw 
++	*/
++	result = 0;
++	for (i = 1; i < n; i++) {
++         	result |= thickLineColor(dst, *x1, *y1, *x2, *y2, width, color);
++		x1 = x2;
++		y1 = y2;
++		x2++;
++		y2++;
++	}
++	result |= thickLineColor(dst, *x1, *y1, *vx, *vy, width, color);
++
++	return (result);
++}
++
++#if 0
++int thickPatternedPolygonColor(SDL_Surface * dst, const Sint16 * vx, const Sint16 * vy, int n, Uint8 width, Uint32 color, Uint8 pattern)
++{
++	int result;
++	int i;
++	const Sint16 *x1, *y1, *x2, *y2;
++
++	/*
++	* Check visibility of clipping rectangle
++	*/
++	if ((dst->clip_rect.w==0) || (dst->clip_rect.h==0)) {
++		return(0);
++	}
++
++	/*
++	* Vertex array NULL check 
++	*/
++	if (vx == NULL) {
++		return (-1);
++	}
++	if (vy == NULL) {
++		return (-1);
++	}
++
++	/*
++	* Sanity check 
++	*/
++	if (n < 3) {
++		return (-1);
++	}
++
++	/*
++	* Pointer setup 
++	*/
++	x1 = x2 = vx;
++	y1 = y2 = vy;
++	x2++;
++	y2++;
++
++	/*
++	* Draw 
++	*/
++	result = 0;
++	for (i = 1; i < n; i++) {
++	        result |= thickPatternedLineColor(dst, *x1, *y1, *x2, *y2, width, color, pattern);
++		x1 = x2;
++		y1 = y2;
++		x2++;
++		y2++;
++	}
++	result |= thickPatternedLineColor(dst, *x1, *y1, *vx, *vy, width, color, pattern );
++
++	return (result);
++}
++
++#endif 
++
+ /*!
+ \brief Draw polygon with alpha blending.
+ 
+@@ -6380,16 +6554,11 @@ void _murphyParaline(SDL_gfxMurphyIterat
+ 	int p;
+ 	d1 = -d1;
+ 
+-	/*
+-	* Lock the surface 
+-	*/
+-	if (SDL_MUSTLOCK(m->dst)) {
+-		SDL_LockSurface(m->dst);
+-	}
+ 
+ 	for (p = 0; p <= m->u; p++) {
+ 
+-		pixelColorNolock(m->dst, x, y, m->color);
++	  (*m->drawRoutine)(m->dst,x,y,m->mcolor,m->alpha);
++	  //		_putPixelAlpha(m->dst, x, y, m->mcolor, m->alpha );
+ 
+ 		if (d1 <= m->kt) {
+ 			if (m->oct2 == 0) {
+@@ -6413,10 +6582,6 @@ void _murphyParaline(SDL_gfxMurphyIterat
+ 		}
+ 	}
+ 
+-	/* Unlock surface */
+-	if (SDL_MUSTLOCK(m->dst)) {
+-		SDL_UnlockSurface(m->dst);
+-	}
+ 
+ 	m->tempx = x;
+ 	m->tempy = y;
+@@ -6450,12 +6615,12 @@ void _murphyIteration(SDL_gfxMurphyItera
+ 
+ 	if (miter > 1) {
+ 		if (m->first1x != -32768) {
+-			fix = (m->first1x + m->first2x) / 2;
+-			fiy = (m->first1y + m->first2y) / 2;
+-			lax = (m->last1x + m->last2x) / 2;
+-			lay = (m->last1y + m->last2y) / 2;
+-			curx = (ml1x + ml2x) / 2;
+-			cury = (ml1y + ml2y) / 2;
++			fix = (m->first1x + m->first2x) >> 1;
++			fiy = (m->first1y + m->first2y) >> 1;
++			lax = (m->last1x + m->last2x) >> 1;
++			lay = (m->last1y + m->last2y) >> 1;
++			curx = (ml1x + ml2x) >> 1;
++			cury = (ml1y + ml2y) >> 1;
+ 
+ 			atemp1 = (fix - curx);
+ 			atemp2 = (fiy - cury);
+@@ -6498,39 +6663,32 @@ void _murphyIteration(SDL_gfxMurphyItera
+ 				ml1y = ftmp2;
+ 			}
+ 
+-			/*
+-			* Lock the surface 
+-			*/
+-			if (SDL_MUSTLOCK(m->dst)) {
+-				SDL_LockSurface(m->dst);
+-			}
+ 
+ 			_bresenhamInitialize(&b, m2x, m2y, m1x, m1y);
+ 			do {
+-				pixelColorNolock(m->dst, b.x, b.y, m->color);
++			  (*m->drawRoutine)(m->dst,b.x,b.y,m->mcolor,m->alpha);
++			  //  _putPixelAlpha(m->dst, b.x, b.y, m->mcolor, m->alpha );
+ 			} while (_bresenhamIterate(&b)==0);
+ 
+ 			_bresenhamInitialize(&b, m1x, m1y, ml1bx, ml1by);
+ 			do {
+-				pixelColorNolock(m->dst, b.x, b.y, m->color);
++			  (*m->drawRoutine)(m->dst,b.x,b.y,m->mcolor,m->alpha);
++			  //			       _putPixelAlpha(m->dst, b.x, b.y, m->mcolor, m->alpha );
+ 			} while (_bresenhamIterate(&b)==0);
+ 
+ 			_bresenhamInitialize(&b, ml1bx, ml1by, ml2bx, ml2by);
+ 			do {
+-				pixelColorNolock(m->dst, b.x, b.y, m->color);
++			  (*m->drawRoutine)(m->dst,b.x,b.y,m->mcolor,m->alpha);
++			  //		       _putPixelAlpha(m->dst, b.x, b.y, m->mcolor, m->alpha );
+ 			} while (_bresenhamIterate(&b)==0);
+ 
+ 			_bresenhamInitialize(&b, ml2bx, ml2by, m2x, m2y);
+ 			do {
+-				pixelColorNolock(m->dst, b.x, b.y, m->color);
++			  (*m->drawRoutine)(m->dst,b.x,b.y,m->mcolor,m->alpha);
++			  //			       _putPixelAlpha(m->dst, b.x, b.y, m->mcolor, m->alpha );
+ 			} while (_bresenhamIterate(&b)==0);
+ 
+-			/* Unlock surface */
+-			if (SDL_MUSTLOCK(m->dst)) {
+-				SDL_UnlockSurface(m->dst);
+-			}
+-
+-			px[0] = m1x;
++			/*			px[0] = m1x;
+ 			px[1] = m2x;
+ 			px[2] = ml1bx;
+ 			px[3] = ml2bx;
+@@ -6538,7 +6696,7 @@ void _murphyIteration(SDL_gfxMurphyItera
+ 			py[1] = m2y;
+ 			py[2] = ml1by;
+ 			py[3] = ml2by;			
+-			polygonColor(m->dst, px, py, 4, m->color);						
++			polygonColor(m->dst, px, py, 4, m->color); */
+ 		}
+ 	}
+ 
+@@ -6589,14 +6747,17 @@ void _murphyWideline(SDL_gfxMurphyIterat
+ 	/* Initialisation */
+ 	m->u = x2 - x1;	/* delta x */
+ 	m->v = y2 - y1;	/* delta y */
+-	
++
++	/*
++	* Draw 
++	*/
+ 	if (m->u < 0) {	/* swap to make sure we are in quadrants 1 or 4 */
+ 		temp = x1;
+ 		x1 = x2;
+ 		x2 = temp;
+ 		temp = y1;
+ 		y1 = y2;
+-		y1 = temp;		
++		y2 = temp;		
+ 		m->u *= -1;
+ 		m->v *= -1;
+ 	}
+@@ -6630,12 +6791,13 @@ void _murphyWideline(SDL_gfxMurphyIterat
+ 	sang = sin(ang);
+ 	cang = cos(ang);
+ 
++
+ 	if (m->oct2 == 0) {
+ 		ptx = x1 + (Sint16)lrint(offset * sang);
+ 		if (m->quad4 == 0) {
+-			pty = y1 - (Sint16)lrint(offset * cang);
++		  pty = y1 - (Sint16)lrint(offset * cang);
+ 		} else {
+-			pty = y1 + (Sint16)lrint(offset * cang);
++		  pty = y1 + (Sint16)lrint(offset * cang);
+ 		}
+ 	} else {
+ 		ptx = x1 - (Sint16)lrint(offset * cang);
+@@ -6760,24 +6922,46 @@ int thickLineColor(SDL_Surface * dst, Si
+ 	int wh;
+ 	SDL_gfxMurphyIterator m;
+ 
++	m.alpha = color & 0x000000ff;
++	m.mcolor = SDL_MapRGBA(dst->format, (color & 0xff000000) >> 24,
++			       (color & 0x00ff0000) >> 16, (color & 0x0000ff00) >> 8, m.alpha);
++	m.pattern = 0;
++
+ 	if (dst == NULL) return -1;
+ 	if (width < 1) return -1;
+ 	
+-	/* Special case: thick "point" */
++	/* Special case: thick "point"  */
+ 	if ((x1 == x2) && (y1 == y2)) {
+-		wh = width / 2;
+-		return boxColor(dst, x1 - wh, y1 - wh, x2 + width, y2 + width, color);		
++	  return;
+ 	}
++	/*	wh = width / 2;
++		return boxColor(dst, x1 - wh, y1 - wh, x2 + width, y2 + width, color);		
++		} */
+ 
+ 	m.dst = dst;
+ 	m.color = color;
+ 
++	/*
++	 * Lock the surface 
++	 */
++	if (SDL_MUSTLOCK(dst)) {
++	  SDL_LockSurface(dst);
++	}
++
++	m.drawRoutine = getDrawRoutine( dst, m.alpha );
++	
+ 	_murphyWideline(&m, x1, y1, x2, y2, width, 0);
+-	_murphyWideline(&m, x1, y1, x2, y2, width, 1);
++	//	_murphyWideline(&m, x1, y1, x2, y2, width, 1);
++
++	/* Unlock surface */
++	if (SDL_MUSTLOCK(dst)) {
++	  SDL_UnlockSurface(dst);
++	}
+ 
+ 	return(0);
+ }
+ 
++
+ /*!
+ \brief Draw a thick line with alpha blending.
+ 
+diff -upN SDL_gfx-2.0.23-original/SDL_gfxPrimitives.h SDL_gfx-2.0.23/SDL_gfxPrimitives.h
+--- SDL_gfx-2.0.23-original/SDL_gfxPrimitives.h	2011-12-03 23:00:09.000000000 -0800
++++ SDL_gfx-2.0.23/SDL_gfxPrimitives.h	2013-05-22 08:52:59.384165148 -0700
+@@ -118,6 +118,8 @@ extern "C" {
+ 		Sint16 x2, Sint16 y2, Uint8 r, Uint8 g, Uint8 b, Uint8 a);
+ 
+ 	/* Thick Line */
++	SDL_GFXPRIMITIVES_SCOPE int thickPatternedLineColor(SDL_Surface * dst, Sint16 x1, Sint16 y1, Sint16 x2, Sint16 y2, 
++							    Uint8 width, Uint32 color, Uint8 pattern);
+ 	SDL_GFXPRIMITIVES_SCOPE int thickLineColor(SDL_Surface * dst, Sint16 x1, Sint16 y1, Sint16 x2, Sint16 y2, 
+ 		Uint8 width, Uint32 color);
+ 	SDL_GFXPRIMITIVES_SCOPE int thickLineRGBA(SDL_Surface * dst, Sint16 x1, Sint16 y1, Sint16 x2, Sint16 y2, 
+@@ -198,6 +200,8 @@ extern "C" {
+ 
+ 	/* Polygon */
+ 
++        SDL_GFXPRIMITIVES_SCOPE int thickPatternedPolygonColor(SDL_Surface * dst, const Sint16 * vx, const Sint16 * vy, int n, Uint8 width, Uint32 color, Uint8 pattern);
++        SDL_GFXPRIMITIVES_SCOPE int thickPolygonColor(SDL_Surface * dst, const Sint16 * vx, const Sint16 * vy, int n, Uint8 width, Uint32 color);
+ 	SDL_GFXPRIMITIVES_SCOPE int polygonColor(SDL_Surface * dst, const Sint16 * vx, const Sint16 * vy, int n, Uint32 color);
+ 	SDL_GFXPRIMITIVES_SCOPE int polygonRGBA(SDL_Surface * dst, const Sint16 * vx, const Sint16 * vy,
+ 		int n, Uint8 r, Uint8 g, Uint8 b, Uint8 a);
+@@ -238,6 +242,7 @@ extern "C" {
+ 	SDL_GFXPRIMITIVES_SCOPE int stringColor(SDL_Surface * dst, Sint16 x, Sint16 y, const char *s, Uint32 color);
+ 	SDL_GFXPRIMITIVES_SCOPE int stringRGBA(SDL_Surface * dst, Sint16 x, Sint16 y, const char *s, Uint8 r, Uint8 g, Uint8 b, Uint8 a);
+ 
++
+ 	/* Ends C function definitions when using C++ */
+ #ifdef __cplusplus
+ }
+Common subdirectories: SDL_gfx-2.0.23-original/Test and SDL_gfx-2.0.23/Test

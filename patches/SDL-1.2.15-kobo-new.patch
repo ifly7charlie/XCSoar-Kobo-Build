@@ -1,0 +1,684 @@
+diff -Naur SDL-1.2.15-original/include/SDL_video.h SDL-1.2.15/include/SDL_video.h
+--- SDL-1.2.15-original/include/SDL_video.h	2012-01-19 17:30:06.000000000 +1100
++++ SDL-1.2.15/include/SDL_video.h	2013-06-04 02:53:52.542408689 +1000
+@@ -413,6 +413,8 @@
+  */
+ extern DECLSPEC int SDLCALL SDL_Flip(SDL_Surface *screen);
+ 
++extern DECLSPEC void SDLCALL SDL_Blink(SDL_Surface *screen);
++
+ /**
+  * Set the gamma correction for each of the color channels.
+  * The gamma values range (approximately) between 0.1 and 10.0
+diff -Naur SDL-1.2.15-original/src/video/fbcon/mxcfb.h SDL-1.2.15/src/video/fbcon/mxcfb.h
+--- SDL-1.2.15-original/src/video/fbcon/mxcfb.h	1970-01-01 10:00:00.000000000 +1000
++++ SDL-1.2.15/src/video/fbcon/mxcfb.h	2013-06-02 12:40:13.383304636 +1000
+@@ -0,0 +1,172 @@
++/*
++ * Copyright 2004-2011 Freescale Semiconductor, Inc. All Rights Reserved.
++ */
++
++/*
++ * The code contained herein is licensed under the GNU Lesser General
++ * Public License.  You may obtain a copy of the GNU Lesser General
++ * Public License Version 2.1 or later at the following locations:
++ *
++ * http://www.opensource.org/licenses/lgpl-license.html
++ * http://www.gnu.org/copyleft/lgpl.html
++ */
++
++/*
++ * @file arch-mxc/   mxcfb.h
++ *
++ * @brief Global header file for the MXC Frame buffer
++ *
++ * @ingroup Framebuffer
++ */
++#ifndef __ASM_ARCH_MXCFB_H__
++#define __ASM_ARCH_MXCFB_H__
++
++#include <sys/types.h>
++#include <sys/ioctl.h>
++#include <unistd.h>
++#include <fcntl.h>	
++#include <linux/fb.h>
++
++#define FB_SYNC_OE_LOW_ACT	0x80000000
++#define FB_SYNC_CLK_LAT_FALL	0x40000000
++#define FB_SYNC_DATA_INVERT	0x20000000
++#define FB_SYNC_CLK_IDLE_EN	0x10000000
++#define FB_SYNC_SHARP_MODE	0x08000000
++#define FB_SYNC_SWAP_RGB	0x04000000
++
++struct mxcfb_gbl_alpha {
++	int enable;
++	int alpha;
++};
++
++struct mxcfb_loc_alpha {
++	int enable;
++	int alpha_in_pixel;
++	unsigned long alpha_phy_addr0;
++	unsigned long alpha_phy_addr1;
++};
++
++struct mxcfb_color_key {
++	int enable;
++	__u32 color_key;
++};
++
++struct mxcfb_pos {
++	__u16 x;
++	__u16 y;
++};
++
++struct mxcfb_gamma {
++	int enable;
++	int constk[16];
++	int slopek[16];
++};
++
++struct mxcfb_rect {
++	__u32 top;
++	__u32 left;
++	__u32 width;
++	__u32 height;
++};
++
++#define GRAYSCALE_8BIT				0x1
++#define GRAYSCALE_8BIT_INVERTED			0x2
++
++#define AUTO_UPDATE_MODE_REGION_MODE		0
++#define AUTO_UPDATE_MODE_AUTOMATIC_MODE		1
++
++#define UPDATE_SCHEME_SNAPSHOT			0
++#define UPDATE_SCHEME_QUEUE			1
++#define UPDATE_SCHEME_QUEUE_AND_MERGE		2
++
++#define UPDATE_MODE_PARTIAL			0x0
++#define UPDATE_MODE_FULL			0x1
++
++#define WAVEFORM_MODE_AUTO			257
++
++#define TEMP_USE_AMBIENT			0x1000
++
++#define EPDC_FLAG_ENABLE_INVERSION		0x01
++#define EPDC_FLAG_FORCE_MONOCHROME		0x02
++#define EPDC_FLAG_USE_ALT_BUFFER		0x100
++
++#define FB_POWERDOWN_DISABLE			-1
++#define FB_TEMP_AUTO_UPDATE_DISABLE     -1
++
++struct mxcfb_alt_buffer_data {
++	void *virt_addr;
++	__u32 phys_addr;
++	__u32 width;	/* width of entire buffer */
++	__u32 height;	/* height of entire buffer */
++	struct mxcfb_rect alt_update_region;	/* region within buffer to update */
++};
++
++struct mxcfb_update_data {
++	struct mxcfb_rect update_region;
++	__u32 waveform_mode;
++	__u32 update_mode;
++	__u32 update_marker;
++	int temp;
++	int flags;
++	struct mxcfb_alt_buffer_data alt_buffer_data;
++};
++
++/*
++ * Structure used to define waveform modes for driver
++ * Needed for driver to perform auto-waveform selection
++ */
++struct mxcfb_waveform_modes {
++	int mode_init;
++	int mode_du;
++	int mode_gc4;
++	int mode_gc8;
++	int mode_gc16;
++	int mode_gc32;
++};
++
++#define MXCFB_WAIT_FOR_VSYNC	_IOW('F', 0x20, u_int32_t)
++#define MXCFB_SET_GBL_ALPHA     _IOW('F', 0x21, struct mxcfb_gbl_alpha)
++#define MXCFB_SET_CLR_KEY       _IOW('F', 0x22, struct mxcfb_color_key)
++#define MXCFB_SET_OVERLAY_POS   _IOWR('F', 0x24, struct mxcfb_pos)
++#define MXCFB_GET_FB_IPU_CHAN 	_IOR('F', 0x25, u_int32_t)
++#define MXCFB_SET_LOC_ALPHA     _IOWR('F', 0x26, struct mxcfb_loc_alpha)
++#define MXCFB_SET_LOC_ALP_BUF    _IOW('F', 0x27, unsigned long)
++#define MXCFB_SET_GAMMA	       _IOW('F', 0x28, struct mxcfb_gamma)
++#define MXCFB_GET_FB_IPU_DI 	_IOR('F', 0x29, u_int32_t)
++#define MXCFB_GET_DIFMT	       _IOR('F', 0x2A, u_int32_t)
++#define MXCFB_GET_FB_BLANK     _IOR('F', 0x2B, u_int32_t)
++#define MXCFB_SET_DIFMT		_IOW('F', 0x2C, u_int32_t)
++
++/* IOCTLs for E-ink panel updates */
++#define MXCFB_SET_WAVEFORM_MODES	_IOW('F', 0x2B, struct mxcfb_waveform_modes)
++#define MXCFB_SET_TEMPERATURE		_IOW('F', 0x2C, int32_t)
++#define MXCFB_SET_AUTO_UPDATE_MODE	_IOW('F', 0x2D, __u32)
++#define MXCFB_SEND_UPDATE		_IOW('F', 0x2E, struct mxcfb_update_data)
++#define MXCFB_WAIT_FOR_UPDATE_COMPLETE	_IOW('F', 0x2F, __u32)
++#define MXCFB_SET_PWRDOWN_DELAY		_IOW('F', 0x30, int32_t)
++#define MXCFB_GET_PWRDOWN_DELAY		_IOR('F', 0x31, int32_t)
++#define MXCFB_SET_UPDATE_SCHEME		_IOW('F', 0x32, __u32)
++#define MXCFB_GET_PMIC_TEMPERATURE	_IOR('F', 0x32, int32_t)
++#define MXCFB_SET_BORDER_MODE		_IOR('F', 0x33, int32_t)
++#define MXCFB_SET_EPD_PWR0_CTRL		_IOR('F', 0x34, int32_t)
++#define MXCFB_SET_EPD_PWR2_CTRL		_IOR('F', 0x35, int32_t)
++#define MXCFB_SET_TEMP_AUTO_UPDATE_PERIOD     _IOR('F', 0x36, int32_t)
++#define MXCFB_SET_MERGE_ON_WAVEFORM_MISMATCH	_IOW('F', 0x37, int32_t)
++
++#ifdef __KERNEL__
++
++extern struct fb_videomode mxcfb_modedb[];
++extern int mxcfb_modedb_sz;
++
++enum {
++	MXCFB_REFRESH_OFF,
++	MXCFB_REFRESH_AUTO,
++	MXCFB_REFRESH_PARTIAL,
++};
++
++int mxcfb_set_refresh_mode(struct fb_info *fbi, int mode,
++			   struct mxcfb_rect *update_region);
++
++int mxc_elcdif_frame_addr_setup(dma_addr_t phys);
++#endif				/* __KERNEL__ */
++#endif
+diff -Naur SDL-1.2.15-original/src/video/fbcon/SDL_fbevents.c SDL-1.2.15/src/video/fbcon/SDL_fbevents.c
+--- SDL-1.2.15-original/src/video/fbcon/SDL_fbevents.c	2012-01-19 17:30:06.000000000 +1100
++++ SDL-1.2.15/src/video/fbcon/SDL_fbevents.c	2013-06-01 17:39:23.425739812 +1000
+@@ -55,6 +55,18 @@
+ #define GPM_NODE_FIFO	"/dev/gpmdata"
+ #endif
+ 
++#ifdef KOBO
++#include <linux/input.h>
++
++static int event0_fd = -1;
++static int event1_fd = -1;
++struct input_event ev0[64];
++struct input_event ev1[64];
++static void handle_event1(_THIS);
++static void handle_event0(_THIS);
++#endif
++
++
+ /*#define DEBUG_KEYBOARD*/
+ /*#define DEBUG_MOUSE*/
+ 
+@@ -166,9 +178,9 @@
+ 			if ( ioctl(keyboard_fd, VT_GETSTATE, &vtstate) == 0 ) {
+ 				saved_vt = vtstate.v_active;
+ 			}
+-			if ( ioctl(keyboard_fd, VT_ACTIVATE, current_vt) == 0 ) {
+-				ioctl(keyboard_fd, VT_WAITACTIVE, current_vt);
+-			}
++			//			if ( ioctl(keyboard_fd, VT_ACTIVATE, current_vt) == 0 ) {
++			//	ioctl(keyboard_fd, VT_WAITACTIVE, current_vt);
++			//			}
+ 		}
+ 
+ 		/* Set the terminal input mode */
+@@ -598,7 +610,7 @@
+ 	if ( mousedev == NULL ) {
+ 		/* FIXME someday... allow multiple mice in this driver */
+ 		static const char *ps2mice[] = {
+-		    "/dev/input/mice", "/dev/usbmouse", "/dev/psaux", NULL
++		  "/dev/input/mice", "/dev/usbmouse", "/dev/psaux", NULL
+ 		};
+ 		/* First try to use GPM in repeater mode */
+ 		if ( mouse_fd < 0 ) {
+@@ -657,7 +669,7 @@
+ 		}
+ 		/* Next try to use a PPC ADB port mouse */
+ 		if ( mouse_fd < 0 ) {
+-			mouse_fd = open("/dev/adbmouse", O_RDONLY, 0);
++			mouse_fd = open("/dev/input/event3", O_RDONLY, 0);
+ 			if ( mouse_fd >= 0 ) {
+ #ifdef DEBUG_MOUSE
+ fprintf(stderr, "Using ADB mouse\n");
+@@ -666,10 +678,11 @@
+ 			}
+ 		}
+ 	}
++#if 0
+ 	/* Default to a serial Microsoft mouse */
+ 	if ( mouse_fd < 0 ) {
+ 		if ( mousedev == NULL ) {
+-			mousedev = "/dev/mouse";
++		 			mousedev = "/dev/input/event1";
+ 		}
+ 		mouse_fd = open(mousedev, O_RDONLY, 0);
+ 		if ( mouse_fd >= 0 ) {
+@@ -700,6 +713,7 @@
+ 			}
+ 		}
+ 	}
++#endif
+ 	if ( mouse_fd < 0 ) {
+ 		mouse_drv = MOUSE_NONE;
+ 	}
+@@ -1060,6 +1074,7 @@
+ 
+ 		FD_ZERO(&fdset);
+ 		max_fd = 0;
++#ifndef KOBO
+ 		if ( keyboard_fd >= 0 ) {
+ 			FD_SET(keyboard_fd, &fdset);
+ 			if ( max_fd < keyboard_fd ) {
+@@ -1072,7 +1087,22 @@
+ 				max_fd = mouse_fd;
+ 			}
+ 		}
++#else
++		if ( event0_fd >= 0 ) {
++			FD_SET(event0_fd, &fdset);
++			if ( max_fd < event0_fd ) {
++				max_fd = event0_fd;
++			}
++		}
++		if ( event1_fd >= 0 ) {
++			FD_SET(event1_fd, &fdset);
++			if ( max_fd < event1_fd ) {
++				max_fd = event1_fd;
++			}
++		}
++#endif
+ 		if ( select(max_fd+1, &fdset, NULL, NULL, &zero) > 0 ) {
++#ifndef KOBO
+ 			if ( keyboard_fd >= 0 ) {
+ 				if ( FD_ISSET(keyboard_fd, &fdset) ) {
+ 					handle_keyboard(this);
+@@ -1083,6 +1113,18 @@
+ 					handle_mouse(this);
+ 				}
+ 			}
++#else
++			if ( event1_fd >= 0 ) {
++				if ( FD_ISSET(event1_fd, &fdset) ) {
++					handle_event1(this);
++				}
++			}
++			if ( event0_fd >= 0 ) {
++				if ( FD_ISSET(event0_fd, &fdset) ) {
++					handle_event0(this);
++				}
++			}
++#endif
+ 		}
+ 	} while ( posted );
+ }
+@@ -1252,3 +1294,90 @@
+ 	}
+ 	return(keysym);
+ }
++
++
++#ifdef KOBO
++//for handling TS
++static void handle_event0(_THIS)
++{
++  
++  struct SDL_keysym keysym;
++  int rd, i;
++
++  rd = read(event0_fd, ev0, sizeof(struct input_event) * 64);
++  if( rd < sizeof(struct input_event) ) return;
++
++  for (i = 0; i < rd / sizeof(struct input_event); i++)
++    {
++
++      if( ev0[i].type == 1 ) {
++	
++	if( ev0[i].code == KEY_POWER ) {
++
++	  keysym.scancode = ev0[i].code;
++	  keysym.sym = SDLK_POWER;
++	  keysym.mod = KMOD_NONE;
++
++	  posted += SDL_PrivateKeyboard( ev0[i].value ? SDL_PRESSED : SDL_RELEASED, &keysym);
++	}
++      }
++    }
++  return;
++}
++
++//for handling mouse
++static void handle_event1(_THIS)
++{
++  static int button=0;
++  
++  static int x, y;
++  static int current_x = 0, current_y = 0;
++
++  int rd, i;
++  
++  rd = read(event1_fd, ev1, sizeof(struct input_event) * 64);
++  if( rd < sizeof(struct input_event) ) return;
++
++  
++  for ( i = 0; i < rd / sizeof(struct input_event); i++)
++    {
++      if(ev1[i].type == 3 && ev1[i].code == 0) current_y = ev1[i].value;
++      else if(ev1[i].type == 3 && ev1[i].code == 1) current_x = 600-ev1[i].value;
++      else if(ev1[i].type == 1) {
++	/* force all touch types to be mouse as the kobo has nothing else */
++	button &= ~0x4; 
++	button |= ev1[i].value << 2; 
++      } else if(ev1[i].type == 0 && ev1[i].code == 0 && ev1[i].value == 0) {
++	/* end of sync frame, so emit to the application */
++	FB_vgamousecallback(button, 1, current_x-x, current_y-y);
++        x = current_x; y = current_y;
++      }
++    }
++  
++  return;
++}
++int FB_OpenEventX(_THIS)
++{
++  event0_fd = open("/dev/input/event0", O_RDWR);
++  event1_fd = open("/dev/input/event1", O_RDWR);
++
++  if(event0_fd < 0 && event1_fd < 0)
++    return 0;
++  
++  return 1;
++}
++
++void FB_CloseEventX(_THIS)
++{
++  if ( event0_fd > 0 ) {
++    close(event0_fd);
++  }
++
++  if ( event1_fd > 0 ) {
++    close(event1_fd);
++  }
++
++  event0_fd = -1;
++  event1_fd = -1;
++}
++#endif
+diff -Naur SDL-1.2.15-original/src/video/fbcon/SDL_fbevents_c.h SDL-1.2.15/src/video/fbcon/SDL_fbevents_c.h
+--- SDL-1.2.15-original/src/video/fbcon/SDL_fbevents_c.h	2012-01-19 17:30:06.000000000 +1100
++++ SDL-1.2.15/src/video/fbcon/SDL_fbevents_c.h	2013-06-01 17:39:23.425739812 +1000
+@@ -36,3 +36,9 @@
+ 
+ extern void FB_InitOSKeymap(_THIS);
+ extern void FB_PumpEvents(_THIS);
++
++static int FB_VideoInit(_THIS, SDL_PixelFormat *vformat);
++extern int FB_OpenEventX(_THIS);
++extern void FB_CloseEventX(_THIS);
++extern void FB_vgamousecallback(int button, int relative, int dx, int dy);
++  
+diff -Naur SDL-1.2.15-original/src/video/fbcon/SDL_fbvideo.c SDL-1.2.15/src/video/fbcon/SDL_fbvideo.c
+--- SDL-1.2.15-original/src/video/fbcon/SDL_fbvideo.c	2012-01-19 17:30:06.000000000 +1100
++++ SDL-1.2.15/src/video/fbcon/SDL_fbvideo.c	2013-06-04 11:33:28.681299563 +1000
+@@ -48,7 +48,13 @@
+ #include "SDL_fbmatrox.h"
+ #include "SDL_fbriva.h"
+ 
+-/*#define FBCON_DEBUG*/
++#ifdef KOBO
++#include <stdlib.h>
++#include "mxcfb.h"
++static __u32 epd_update_marker = 0;
++#endif
++
++/*#define FBCON_DEBUG   */
+ 
+ #if defined(i386) && defined(FB_TYPE_VGA_PLANES)
+ #define VGA16_FBCON_SUPPORT
+@@ -56,6 +62,7 @@
+ #ifndef FB_AUX_VGA_PLANES_VGA4
+ #define FB_AUX_VGA_PLANES_VGA4	0
+ #endif
++
+ /*
+ static inline void outb (unsigned char value, unsigned short port)
+ {
+@@ -64,6 +71,15 @@
+ */
+ #endif /* FB_TYPE_VGA_PLANES */
+ 
++#ifdef KOBO
++
++#define KOBO_DITHERMATRIX_WIDTH 9
++#define KOBO_DITHERMATRIX_HEIGHT 13
++
++static uint_fast16_t dither_pattern2[KOBO_DITHERMATRIX_HEIGHT+1][KOBO_DITHERMATRIX_WIDTH+1];
++
++#endif
++
+ /* A list of video resolutions that we query for (sorted largest to smallest) */
+ static const SDL_Rect checkres[] = {
+ 	{  0, 0, 1600, 1200 },		/* 16 bpp: 0x11E, or 286 */
+@@ -506,6 +522,28 @@
+ 	const char *rotation;
+ 	FILE *modesdb;
+ 
++#ifdef KOBO
++	
++	{
++	  int R = 4, 
++	    m = KOBO_DITHERMATRIX_WIDTH, 
++	    n = KOBO_DITHERMATRIX_HEIGHT; 
++
++	  
++	  // k will be in the range of 0 -> 9*13 (m*n) (117), 
++	  // needs to be in the range of 64^2*2.9 based on a 565 display surface
++	  int k = 0;
++	  for( ; k < m*n; k++ ) {
++	    // square scaled then multiple by 3 channels (each channel is (0-64)squared
++	    dither_pattern2[ (k*R)%n ][ (k*R)%m ] = (64*k)/(m*n) * 2.85;
++	    //	    dither_pattern2[ (k*R)%n ][ (k*R)%m ] = ((64*k)/(m*n) * (64*k)/(m*n)) * 2.9;
++	  }
++	}
++	    
++
++#endif
++
++
+ 	/* Initialize the library */
+ 	SDL_fbdev = SDL_getenv("SDL_FBDEV");
+ 	if ( SDL_fbdev == NULL ) {
+@@ -784,6 +822,8 @@
+ 		}
+ 	}
+ 
++	shadow_fb = 1;
++
+ 	if (shadow_fb) {
+ 		shadow_mem = (char *)SDL_malloc(mapped_memlen);
+ 		if (shadow_mem == NULL) {
+@@ -792,11 +832,26 @@
+ 		} 
+ 	}
+ 
++#ifdef KOBO
++	ioctl(console_fd, MXCFB_SET_UPDATE_SCHEME, UPDATE_SCHEME_QUEUE);
++#endif
++
++#ifdef KOBO
++	  if ( FB_OpenEventX(this) == 0 ) {
++	    SDL_SetError("Unable to open /dev/input/eventX");
++	    FB_VideoQuit(this);
++	    return(-1);
++	  }
++	  printf( "Opened events\n" );
++#endif
++
+ 	/* Enable mouse and keyboard support */
+ 	if ( FB_OpenKeyboard(this) < 0 ) {
+ 		FB_VideoQuit(this);
+ 		return(-1);
+ 	}
++
++#ifndef KOBO
+ 	if ( FB_OpenMouse(this) < 0 ) {
+ 		const char *sdl_nomouse;
+ 
+@@ -807,6 +862,7 @@
+ 			return(-1);
+ 		}
+ 	}
++#endif
+ 
+ 	/* We're done! */
+ 	return(0);
+@@ -1026,7 +1082,8 @@
+ #endif
+ 	/* Do not use double buffering with shadow buffer */
+ 	if (shadow_fb) {
+-		flags &= ~SDL_DOUBLEBUF;
++	  fprintf(stderr, "using shadow_fb\n");
++	  flags &= ~SDL_DOUBLEBUF;
+ 	}
+ 
+ 	if ( (vinfo.xres != width) || (vinfo.yres != height) ||
+@@ -1420,6 +1477,13 @@
+ 	return;
+ }
+ 
++#ifdef KOBO
++void FB_WaitEPD(_THIS)
++{
++	ioctl(console_fd, MXCFB_WAIT_FOR_UPDATE_COMPLETE, &epd_update_marker);
++}
++#endif
++
+ static int FB_FlipHWSurface(_THIS, SDL_Surface *surface)
+ {
+ 	if ( switched_away ) {
+@@ -1442,6 +1506,7 @@
+ 	return(0);
+ }
+ 
++
+ static void FB_blit16(Uint8 *byte_src_pos, int src_right_delta, int src_down_delta,
+ 		Uint8 *byte_dst_pos, int dst_linebytes, int width, int height)
+ {
+@@ -1449,13 +1514,57 @@
+ 	Uint16 *src_pos = (Uint16 *)byte_src_pos;
+ 	Uint16 *dst_pos = (Uint16 *)byte_dst_pos;
+ 
++#ifdef KOBO
++	// this will cause the noise to shift around on the screen, amazingly this
++	// has the effect of causing the pixels to 'refresh' preventing darkening of
++	// the ghosting as dithered areas overlap.
++	uint_fast16_t dither_v = rand() % KOBO_DITHERMATRIX_HEIGHT;
++
++#endif
+ 	while (height) {
+ 		Uint16 *src = src_pos;
+ 		Uint16 *dst = dst_pos;
++
++#ifdef KOBO
++		// we use this for scanning the dither pattern
++		// a lot less math than doing it with a mod on each pixel...
++		uint_fast16_t *dither_h = dither_pattern2[dither_v];
++		uint_fast16_t *dither_h_start = dither_h, *dither_h_end = dither_h + KOBO_DITHERMATRIX_WIDTH;
++
++		if( ++dither_v == KOBO_DITHERMATRIX_HEIGHT ) {
++		  dither_v = 0;
++		}
++#endif
++
+ 		for (w = width; w != 0; w--) {
+-			*dst = *src;
+-			src += src_right_delta;
+-			dst++;
++#ifdef KOBO
++		  // Dithering is important to ensure that we have high speed updates, on the e-ink screen
++		  // it will only achieve a low refresh rate when it has colours other than black or white
++		  // we are assuming a 565 screen here as an optimisation, if you get wonky output on a non
++		  // kobo mini device that would be the problem ;)
++
++		  // summed brightness of the pixel, not perfect squared would be better at representing 
++		  // apparent brightness but this is quicker which matters on the Kobo
++		  uint_fast16_t c = ((*src >> 10)&0x3e) +  ((*src >>5)&0x3f) + ((*src<<1)&0x3e);          
++
++		  // Check to see if we are above the threshold for the current pixel
++		  // it is based on the dither pattern.  We use the random offset to deliberately
++		  // make the pattern move on each update, which will level and reduce the ghosting over time.
++		  *dst = (c > *dither_h) ? 0xffff : 0;
++
++		  if( ++dither_h == dither_h_end ) {
++		    dither_h = dither_h_start;
++		  }
++
++		  //		  *dst= (c > dither_pattern2[(random_delta_h+height) % KOBO_DITHERMATRIX_HEIGHT][(random_delta_w+w) % KOBO_DITHERMATRIX_WIDTH])
++		  src ++;
++		  dst ++;
++
++#else
++		  *dst = *src;
++		  src++;
++		  dst++;
++#endif
+ 		}
+ 		dst_pos = (Uint16 *)((Uint8 *)dst_pos + dst_linebytes);
+ 		src_pos += src_down_delta;
+@@ -1604,6 +1713,21 @@
+ 				physlinebytes,
+ 				scr_x2 - scr_x1,
+ 				scr_y2 - scr_y1);
++
++#ifdef KOBO
++		epd_update_marker++;
++
++		// JMW
++		struct mxcfb_update_data epd_update_data = {
++		  {rects[i].x, rects[i].y, rects[i].w, rects[i].h},
++		  WAVEFORM_MODE_AUTO,	
++		  UPDATE_MODE_PARTIAL,  // FULL
++		  epd_update_marker, 
++		  TEMP_USE_AMBIENT,
++		  EPDC_FLAG_FORCE_MONOCHROME,
++		};
++		ioctl(console_fd, MXCFB_SEND_UPDATE, &epd_update_data);
++#endif
+ 	}
+ }
+ 
+diff -Naur SDL-1.2.15-original/src/video/SDL_video.c SDL-1.2.15/src/video/SDL_video.c
+--- SDL-1.2.15-original/src/video/SDL_video.c	2012-01-19 17:30:06.000000000 +1100
++++ SDL-1.2.15/src/video/SDL_video.c	2013-06-04 03:23:56.134344524 +1000
+@@ -514,6 +514,26 @@
+ 	}
+ }
+ 
++#ifdef KOBO
++extern void FB_WaitEPD(SDL_VideoDevice *this);
++
++void SDL_Blink(SDL_Surface *surface) {
++  Uint32 black, white;
++  black = SDL_MapRGB(surface->format, 0, 0, 0);
++  white = SDL_MapRGB(surface->format, 255, 255, 255);
++
++  FB_WaitEPD(current_video);
++
++  SDL_FillRect(surface, NULL, black);
++  SDL_UpdateRect(surface, 0, 0, 0, 0);
++  FB_WaitEPD(current_video);
++
++  SDL_FillRect(surface, NULL, white);
++  SDL_UpdateRect(surface, 0, 0, 0, 0);
++  FB_WaitEPD(current_video);
++}
++#endif
++
+ /*
+  * Create a shadow surface suitable for fooling the app. :-)
+  */
+@@ -1150,6 +1170,7 @@
+ 	} else {
+ 		SDL_UpdateRect(screen, 0, 0, 0, 0);
+ 	}
++
+ 	return(0);
+ }
+ 
