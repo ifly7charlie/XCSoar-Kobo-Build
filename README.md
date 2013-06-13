@@ -51,10 +51,15 @@ Unfortunately the Kobo Kernel must be compiled with an older version of GCC (4.4
 ### Installing
 
 * To install to the boot SD card you have a few options
+
 > dd if=arch/arm/boot/uImage of=/dev/[your memory card] bs=512 seek=2048
+
 or
+
 > copy to /mnt/onboard/.kobo/upgrade/uImage and touch /mnt/onboard/.kobo/KoboRoot.tgz then insert card and reboot kobo
+
 or
+
 > copy to SD card (XCSoar installed), or normal Kobo plugged into laptop in .kobo/upgrade/uImage touch .kobo/KoboRoot.tgz then reboot kobo
 
 note that the memory card is the WHOLE card, not a partition.  So if your card is /dev/sdb use this not the root partition of /dev/sdb1.  The kernel is installed outside of the filesystem at an absolute offset!
@@ -77,6 +82,7 @@ This is a two part process - one is seting up the build environment, which can b
 ### Setup - G++ - Hardware Float
 
 * Install g++ toolchain, this should go into /usr/arm-linux-gnueabihf directory
+
 > sudo apt-get install  gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf
 
 * Change ownership so you don't need to compile as root (as above)
