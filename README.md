@@ -23,8 +23,6 @@ Unfortunately the Kobo Kernel must be compiled with an older version of GCC (4.4
 * I used a new Ubuntu 12.04 Virtual Machine on my laptop
 
 * Install codesourcery GCC toolchain to /usr/arm-none-linux-gnueabi by untaring the downloaded archive into the /usr (ditching the arm2010-blah directory) directory
-> http://sources.buildroot.net/arm-2010q1-202-arm-none-linux-gnueabi-i686-pc-linux-gnu.tar.bz2
-
 > wget http://sources.buildroot.net/arm-2010q1-202-arm-none-linux-gnueabi-i686-pc-linux-gnu.tar.bz2
 
 > bunzip2 arm-2010q1-202-arm-none-linux-gnueabi-i686-pc-linux-gnu.tar.bz2
