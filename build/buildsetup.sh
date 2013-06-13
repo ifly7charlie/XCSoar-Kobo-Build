@@ -1,12 +1,16 @@
+#!/bin/sh
 # make the stuff needed to get it to build
 # note the directory is where your cross compilation tools are installed
 
+
+directory=`pwd`
+directory=${directory%%/build}
 mkdir -p ~/kobo/tmp
-cat > /kobo/KoboLabs/build/build-config-user.sh <<__END__
-DEVICEROOT=/usr/arm-none-linux-gnueabi
-CROSSTARGET=arm-none-linux-gnueabi
+cat > $directory/build/build-config-user.sh <<__END__
+DEVICEROOT=/usr/arm-linux-gnueabihf
+CROSSTARGET=arm-linux-gnueabihf
 __END__
 
 # then to build
 cd ~/kobo/tmp
-/kobo/KoboLabs/build/build-all.sh
+$directory/build-all.sh
