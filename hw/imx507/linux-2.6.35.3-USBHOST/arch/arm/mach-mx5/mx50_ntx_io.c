@@ -1624,30 +1624,6 @@ static int gpio_initials(void)
 
 	// 3G_RF_Wake
 
-	/* ACIN PG */
-	mxc_iomux_v3_setup_pad(MX50_PAD_ECSPI2_SS0__GPIO_4_19);
-	gpio_request(GPIO_ACIN_PG, "acin_pg");
-	gpio_direction_input(GPIO_ACIN_PG);
-	{
-		/* Set AC in as wakeup resource */
-		irq = gpio_to_irq(GPIO_ACIN_PG);
-		
-		if (gpio_get_value (GPIO_ACIN_PG))
-			set_irq_type(irq, IRQF_TRIGGER_FALLING);
-		else
-			set_irq_type(irq, IRQF_TRIGGER_RISING);
-		ret = request_irq(irq, ac_in_int, 0, "acin_pg", 0);
-		if (ret)
-			pr_info("register ACIN_PG interrupt failed\n");
-		else
-			enable_irq_wake(irq);
-		acin_pg_timer.function = acin_pg_chk;
-		init_timer(&acin_pg_timer);
-	}
-	mxc_iomux_v3_setup_pad(MX50_PAD_ECSPI2_MISO__GPIO_4_18);
-	gpio_request(GPIO_CHG, "charge_det");
-	gpio_direction_input(GPIO_CHG);
-	
 	/* ON_LED */
 	mxc_iomux_v3_setup_pad(MX50_PAD_EIM_OE__GPIO_1_24);
 	gpio_request(GPIO_LED_ON, "led_on");
