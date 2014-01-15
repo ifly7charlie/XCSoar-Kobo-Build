@@ -16,7 +16,7 @@ if [ -z "${MKIMAGE}" ]; then
 fi
 
 
-KREV="XCSoar"
+KREV="USB-hot-plug"
 
 UTS_VER="$(cat include/generated/compile.h |grep "UTS_VERSION"|awk -F\" '{print $2}'|awk '{print $1,$4,$5,$6}')"
 if [ -z "${UTS_VER}" ];then
