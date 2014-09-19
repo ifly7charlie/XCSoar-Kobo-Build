@@ -22,7 +22,7 @@
  * this value. When using interrupt-driven software controlled hardware
  * flow control set this option to -1.
  */
-#define UART1_UCR4_CTSTL        16
+#define UART1_UCR4_CTSTL        16*2
 /*!
  * Specify the size of the DMA receive buffer. The minimum buffer size is 512
  * bytes. The buffer size should be a multiple of 256.
@@ -41,7 +41,7 @@
  * Decimal to anything from 0 to 32. Read the HW spec while specifying this
  * value.
  */
-#define UART1_UFCR_TXTL         16
+#define UART1_UFCR_TXTL         16*2
 #define UART1_DMA_ENABLE	0
 /* UART 2 configuration */
 #if 1
