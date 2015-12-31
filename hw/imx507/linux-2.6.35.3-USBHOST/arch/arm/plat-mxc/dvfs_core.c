@@ -335,7 +335,6 @@ static int set_cpu_freq(int wp)
 		/* Wait for arm podf Enable */
 		while ((__raw_readl(gpc_base + dvfs_data->gpc_cntr_offset) &
 			MXC_GPCCNTR_STRT) == MXC_GPCCNTR_STRT) {
-			printk(KERN_DEBUG "Waiting arm_podf enabled!\n");
 			udelay(10);
 		}
 		spin_unlock_irqrestore(&mxc_dvfs_core_lock, flags);

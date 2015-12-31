@@ -1470,7 +1470,8 @@ int ntx_charge_status (void)
 }
 int ntx_get_battery_vol (void)
 {
-	int i, battValue, temp, result;
+	int i, battValue, temp, result, uvolt;
+	static int uvolt_prev = 0;
 	const unsigned short battGasgauge[] = {
 	//	3.0V, 3.1V, 3.2V, 3.3V, 3.4V, 3.5V, 3.6V, 3.7V, 3.8V, 3.9V, 4.0V, 4.1V, 4.2V,
 //		 743,  767,  791,  812,  835,  860,  885,  909,  935,  960,  985, 1010, 1023,
@@ -1536,17 +1537,24 @@ int ntx_get_battery_vol (void)
 		}
 	}
 //	printk ("[%s-%d] battery %d (%d)\n", __func__, __LINE__, battValue,result);
+	uvolt = result;
 	if (4100000 <= result) {
-		printk("%s : full !! %d\n",__FUNCTION__,result);
+		if (uvolt != uvolt_prev)
+			printk("%s : full !! %d\n",__FUNCTION__,result);
+		uvolt_prev = uvolt;
 		return 100;
 	}
 	if (3400000 > result) {
-		printk("%s : empty !! %d\n",__FUNCTION__,result);
+		if (uvolt != uvolt_prev)
+			printk("%s : empty !! %d\n",__FUNCTION__,result);
+		uvolt_prev = uvolt;
 		return 0;
 	}
 	result = 4100000 - result;
 	result /= 7000;
-	printk ("[%s-%d] %d,bat=%d\n", __func__, __LINE__, (100-result),battValue);
+	if (uvolt != uvolt_prev)
+		printk ("[%s-%d] %d,bat=%d\n", __func__, __LINE__, (100-result),battValue);
+	uvolt_prev = uvolt;
 	return 100-result;
 }
 
