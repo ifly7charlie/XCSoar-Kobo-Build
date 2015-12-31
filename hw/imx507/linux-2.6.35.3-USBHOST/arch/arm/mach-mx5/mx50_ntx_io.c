@@ -1443,8 +1443,6 @@ extern void ntx_charger_online_event_callback(void);
 
 static void acin_pg_chk(unsigned long v)
 {
-	int i;
-
 	if (!gpio_get_value (GPIO_ACIN_PG)) {
 		++g_acin_pg_debounce;
 		if (10 == g_acin_pg_debounce) {
