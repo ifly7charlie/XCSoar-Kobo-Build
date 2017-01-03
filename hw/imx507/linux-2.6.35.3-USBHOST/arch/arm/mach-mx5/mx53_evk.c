@@ -1525,10 +1525,6 @@ static void __init mxc_board_init(void)
 	mxc_register_device(&mxc_sgtl5000_device, &sgtl5000_data);
 	mxc_register_device(&mxc_mlb_device, &mlb_data);
 	mxc_register_device(&mxc_powerkey_device, &pwrkey_data);
-	mx5_set_otghost_vbus_func(mx53_gpio_usbotg_driver_vbus);
-	mx5_usb_dr_init();
-	mx5_set_host1_vbus_func(mx53_gpio_host1_driver_vbus);
-	mx5_usbh1_init();
 	mxc_register_device(&mxc_nandv2_mtd_device, &mxc_nand_data);
 	if (mxc_apc_on) {
 		mxc_register_device(&mxc_esai_device, &esai_data);

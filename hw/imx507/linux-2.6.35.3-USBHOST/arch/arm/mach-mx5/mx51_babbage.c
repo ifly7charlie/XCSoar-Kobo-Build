@@ -1335,9 +1335,6 @@ static void __init mxc_board_init(void)
 	gpio_request(BABBAGE_AUDAMP_STBY, "audioamp-stdby");
 	gpio_direction_output(BABBAGE_AUDAMP_STBY, 0);
 	mxc_register_device(&mxc_sgtl5000_device, &sgtl5000_data);
-
-	mx5_usb_dr_init();
-	mx5_usbh1_init();
 }
 
 static void __init mx51_babbage_timer_init(void)

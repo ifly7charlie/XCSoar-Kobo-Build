@@ -1982,10 +1982,11 @@ static struct platform_pwm_backlight_data mxc_pwm_backlight_data = {
 	.pwm_period_ns = 2000000,
 };
 
-static void mx50_arm2_usb_set_vbus(bool enable)
+void mx50_arm2_usb_set_vbus(bool enable)
 {
 //	gpio_set_value(USB_OTG_PWR, enable);
 }
+EXPORT_SYMBOL(mx50_arm2_usb_set_vbus);
 
 static void mxc_register_powerkey(pwrkey_callback pk_cb)
 {
@@ -2648,12 +2649,8 @@ static void __init mxc_board_init(void)
 /*
 	pm_power_off = mxc_power_off;
 	*/
-	mx5_set_otghost_vbus_func(mx50_arm2_usb_set_vbus);
 //	mxc_register_device(&mxc_sgtl5000_device, &sgtl5000_data);
 //	mxc_register_device(&gpmi_nfc_device, &gpmi_nfc_platform_data);
-	mx5_usb_dr_init();
-	mx5_usbh1_init();
-	mxc_register_device(&mxc_perfmon, &mxc_perfmon_data);
 }
 
 static void __init mx50_rdp_timer_init(void)

@@ -35,6 +35,7 @@ int __init mxc_register_device(struct platform_device *pdev, void *data)
 
 	return ret;
 }
+EXPORT_SYMBOL(mxc_register_device);
 
 struct platform_device *__init imx_add_platform_device(const char *name, int id,
 		const struct resource *res, unsigned int num_resources,

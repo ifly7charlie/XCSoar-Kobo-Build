@@ -43,6 +43,10 @@
 #include <asm/system.h>
 #include <asm/unaligned.h>
 
+extern void mx50_arm2_usb_set_vbus(bool enable);
+#include "../../../arch/arm/mach-mx5/usb_dr.c"
+#include "../../../arch/arm/mach-mx5/usb_h1.c"
+
 /*-------------------------------------------------------------------------*/
 
 /*
@@ -1177,6 +1181,11 @@ MODULE_LICENSE ("GPL");
 static int __init ehci_hcd_init(void)
 {
 	int retval = 0;
+
+	mx5_set_otghost_vbus_func(mx50_arm2_usb_set_vbus);
+	mx5_usb_dr_init();
+	mx5_usbh1_init();
+	mxc_register_device(&mxc_perfmon, &mxc_perfmon_data);
 
 	if (usb_disabled())
 		return -ENODEV;

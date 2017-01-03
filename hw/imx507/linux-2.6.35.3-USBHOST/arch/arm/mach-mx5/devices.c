@@ -1229,6 +1229,7 @@ struct platform_device mxc_usbdr_udc_device = {
 	.resource      = usbotg_udc_resources,
 	.num_resources = ARRAY_SIZE(usbotg_udc_resources),
 };
+EXPORT_SYMBOL(mxc_usbdr_udc_device);
 
 struct platform_device mxc_usbdr_otg_device = {
 	.name = "fsl-usb2-otg",
@@ -1251,6 +1252,7 @@ struct platform_device mxc_usbdr_host_device = {
 		.coherent_dma_mask = DMA_BIT_MASK(32),
 	},
 };
+EXPORT_SYMBOL(mxc_usbdr_host_device);
 
 struct platform_device mxc_usbdr_wakeup_device = {
 	.name = "usb_wakeup",
@@ -1258,6 +1260,7 @@ struct platform_device mxc_usbdr_wakeup_device = {
 	.num_resources = ARRAY_SIZE(usbotg_wakeup_resources),
 	.resource = usbotg_wakeup_resources,
 };
+EXPORT_SYMBOL(mxc_usbdr_wakeup_device);
 
 static struct resource usbh1_resources[] = {
 	{
@@ -1292,6 +1295,7 @@ struct platform_device mxc_usbh1_device = {
 		.coherent_dma_mask = DMA_BIT_MASK(32),
 	},
 };
+EXPORT_SYMBOL(mxc_usbh1_device);
 
 struct platform_device mxc_usbh1_wakeup_device = {
 	.name = "usb_wakeup",
@@ -1299,6 +1303,7 @@ struct platform_device mxc_usbh1_wakeup_device = {
 	.num_resources = ARRAY_SIZE(usbh1_wakeup_resources),
 	.resource = usbh1_wakeup_resources,
 };
+EXPORT_SYMBOL(mxc_usbh1_wakeup_device);
 
 static struct resource usbh2_resources[] = {
 	{
@@ -1499,6 +1504,7 @@ struct platform_device mxc_perfmon = {
 	.num_resources	= ARRAY_SIZE(mx5_perfmon_res),
 	.id			= 0
 };
+EXPORT_SYMBOL(mxc_perfmon);
 
 static struct mxs_perfmon_bit_config
 mx50_perfmon_bit_config[] = {
@@ -1520,6 +1526,7 @@ struct mxs_platform_perfmon_data mxc_perfmon_data = {
 	.bit_config_tab = mx50_perfmon_bit_config,
 	.bit_config_cnt = ARRAY_SIZE(mx50_perfmon_bit_config),
 };
+EXPORT_SYMBOL(mxc_perfmon_data);
 
 static struct resource dma_apbh_resources[] = {
 	{

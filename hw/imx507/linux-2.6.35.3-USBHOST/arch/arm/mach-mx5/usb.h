@@ -10,6 +10,8 @@
  * http://www.opensource.org/licenses/gpl-license.html
  * http://www.gnu.org/copyleft/gpl.html
  */
+#ifndef MACH_MX5_USB_h
+#define MACH_MX5_USB_h
 
 #include <mach/common.h>
 #include "devices.h"
@@ -46,3 +48,4 @@ extern void mx5_set_otghost_vbus_func(driver_vbus_func);
 #define DR_HOST_MODE	FSL_USB2_DR_HOST
 #endif
 
+#endif /* MACH_MX5_USB_h */
